@@ -39,7 +39,7 @@ A diferencia de los ATS tradicionales — que partieron como bases de datos de C
 
 - **Reducción del time-to-hire**: el cribado automático y la programación de entrevistas integrada con calendario eliminan días de espera en cada etapa del pipeline.
 - **Mejora de la calidad de contratación**: el ranking objetivo basado en similitud semántica entre el CV y la descripción del puesto, junto con scorecards estructuradas, ayuda a tomar decisiones más consistentes.
-- **Trazabilidad y cumplimiento normativo**: cada decisión automática queda registrada, explicable y auditable — clave para cumplir con GDPR y con el reglamento europeo sobre IA (EU AI Act).
+- **Trazabilidad y bases de cumplimiento normativo**: cada decisión automática queda registrada, explicable y auditable, sentando las bases necesarias para abordar las exigencias de GDPR y del reglamento europeo sobre IA (EU AI Act) — el cumplimiento completo requiere además medidas organizativas que quedan fuera del producto puramente técnico.
 - **Colaboración fluida**: reclutadores y hiring managers trabajan en un mismo espacio en tiempo real, sin reenviar Excel ni hilos de correo.
 
 ### 1.4. Ventajas competitivas
@@ -338,13 +338,14 @@ El siguiente modelo cubre las entidades centrales necesarias para soportar los t
 | **Usuario** | `id: UUID (PK)`, `empresa_id: UUID (FK)`, `email: string`, `nombre: string`, `rol: enum(admin, recruiter, hiring_manager, interviewer)`, `idioma: string`, `creado_en: timestamp`, `ultimo_acceso: timestamp` |
 | **Oferta** | `id: UUID (PK)`, `empresa_id: UUID (FK)`, `titulo: string`, `descripcion: text`, `requisitos: text`, `ubicacion: string`, `modalidad: enum(presencial, remoto, hibrido)`, `banda_salarial_min: decimal`, `banda_salarial_max: decimal`, `estado: enum(borrador, activa, pausada, cerrada)`, `hiring_manager_id: UUID (FK)`, `creada_en: timestamp`, `publicada_en: timestamp` |
 | **EtapaPipeline** | `id: UUID (PK)`, `oferta_id: UUID (FK)`, `nombre: string`, `orden: integer`, `tipo: enum(screen, technical, panel, offer, hired, rejected)` |
-| **Candidato** | `id: UUID (PK)`, `empresa_id: UUID (FK)`, `nombre: string`, `apellidos: string`, `email: string`, `telefono: string`, `linkedin_url: string`, `ubicacion_actual: string`, `fuente: string`, `creado_en: timestamp`, `consentimiento_gdpr: boolean` |
-| **Candidatura** | `id: UUID (PK)`, `oferta_id: UUID (FK)`, `candidato_id: UUID (FK)`, `etapa_actual_id: UUID (FK)`, `estado: enum(activa, contratado, rechazado, retirado)`, `score_ia: decimal`, `aplicado_en: timestamp`, `ultima_actualizacion: timestamp` |
+| **Candidato** | `id: UUID (PK)`, `nombre: string`, `apellidos: string`, `email: string` *(único)*, `telefono: string`, `linkedin_url: string`, `ubicacion_actual: string`, `creado_en: timestamp`, `consentimiento_gdpr: boolean` |
+| **CandidatoEmpresa** | `id: UUID (PK)`, `candidato_id: UUID (FK)`, `empresa_id: UUID (FK)`, `etiquetas: jsonb`, `notas: text`, `fuente: string`, `creado_en: timestamp` |
+| **Candidatura** | `id: UUID (PK)`, `oferta_id: UUID (FK)`, `candidato_id: UUID (FK)`, `empresa_id: UUID (FK)` *(denormalizado para RLS)*, `etapa_actual_id: UUID (FK)`, `estado: enum(activa, contratado, rechazado, retirado)`, `score_ia_actual: decimal`, `aplicado_en: timestamp`, `ultima_actualizacion: timestamp` |
 | **Documento** | `id: UUID (PK)`, `candidato_id: UUID (FK)`, `tipo: enum(cv, cover_letter, portfolio, otro)`, `url_almacenamiento: string`, `mime_type: string`, `tamano_bytes: integer`, `subido_en: timestamp` |
-| **ResultadoCribadoIA** | `id: UUID (PK)`, `candidatura_id: UUID (FK)`, `score: decimal`, `resumen_ejecutivo: text`, `fortalezas: jsonb`, `riesgos: jsonb`, `preguntas_sugeridas: jsonb`, `skills_detectadas: jsonb`, `version_modelo: string`, `procesado_en: timestamp` |
+| **ResultadoCribadoIA** | `id: UUID (PK)`, `candidatura_id: UUID (FK)`, `version: integer`, `superseded_by_id: UUID (FK, nullable)`, `score: decimal`, `resumen_ejecutivo: text`, `fortalezas: jsonb`, `riesgos: jsonb`, `preguntas_sugeridas: jsonb`, `skills_detectadas: jsonb`, `version_modelo: string`, `procesado_en: timestamp` *(restricción: `unique(candidatura_id, version)`)* |
 | **Entrevista** | `id: UUID (PK)`, `candidatura_id: UUID (FK)`, `etapa_id: UUID (FK)`, `tipo: enum(phone, tecnica, panel, cultural)`, `inicio_planificado: timestamp`, `fin_planificado: timestamp`, `ubicacion_url: string`, `estado: enum(programada, completada, no_show, cancelada)`, `creada_en: timestamp` |
 | **ParticipanteEntrevista** | `id: UUID (PK)`, `entrevista_id: UUID (FK)`, `usuario_id: UUID (FK)`, `rol: enum(entrevistador, observador)`, `confirmado: boolean` |
-| **Scorecard** | `id: UUID (PK)`, `entrevista_id: UUID (FK)`, `usuario_id: UUID (FK)`, `recomendacion: enum(strong_yes, yes, no, strong_no)`, `comentario_global: text`, `enviada_en: timestamp` |
+| **Scorecard** | `id: UUID (PK)`, `entrevista_id: UUID (FK)`, `usuario_id: UUID (FK)`, `estado: enum(borrador, enviada)`, `recomendacion: enum(strong_yes, yes, no, strong_no)`, `comentario_global: text`, `enviada_en: timestamp` |
 | **CriterioScorecard** | `id: UUID (PK)`, `scorecard_id: UUID (FK)`, `nombre: string`, `peso: decimal`, `puntuacion: integer (1-5)`, `comentario: text` |
 | **Comentario** | `id: UUID (PK)`, `candidatura_id: UUID (FK)`, `usuario_id: UUID (FK)`, `cuerpo: text`, `menciones: jsonb`, `creado_en: timestamp` |
 | **Notificacion** | `id: UUID (PK)`, `usuario_id: UUID (FK)`, `tipo: enum`, `canal: enum(in_app, email, push)`, `payload: jsonb`, `leida: boolean`, `enviada_en: timestamp` |
@@ -357,7 +358,7 @@ El siguiente modelo cubre las entidades centrales necesarias para soportar los t
 erDiagram
     EMPRESA ||--o{ USUARIO : "emplea"
     EMPRESA ||--o{ OFERTA : "publica"
-    EMPRESA ||--o{ CANDIDATO : "registra"
+    EMPRESA ||--o{ CANDIDATO_EMPRESA : "registra"
     EMPRESA ||--o{ INTEGRACION_EXTERNA : "configura"
     EMPRESA ||--o{ AUDIT_LOG : "audita"
 
@@ -370,13 +371,16 @@ erDiagram
     OFERTA ||--o{ ETAPA_PIPELINE : "define"
     OFERTA ||--o{ CANDIDATURA : "recibe"
 
+    CANDIDATO ||--o{ CANDIDATO_EMPRESA : "vinculado a"
     CANDIDATO ||--o{ CANDIDATURA : "aplica con"
     CANDIDATO ||--o{ DOCUMENTO : "adjunta"
 
     CANDIDATURA }o--|| ETAPA_PIPELINE : "está en"
     CANDIDATURA ||--o{ ENTREVISTA : "tiene"
-    CANDIDATURA ||--|| RESULTADO_CRIBADO_IA : "evaluada por"
+    CANDIDATURA ||--o{ RESULTADO_CRIBADO_IA : "evaluada por (versiones)"
     CANDIDATURA ||--o{ COMENTARIO : "agrega"
+
+    RESULTADO_CRIBADO_IA ||--o| RESULTADO_CRIBADO_IA : "superseded_by"
 
     ENTREVISTA ||--o{ PARTICIPANTE_ENTREVISTA : "convoca"
     ENTREVISTA ||--o{ SCORECARD : "produce"
@@ -425,24 +429,32 @@ erDiagram
     }
     CANDIDATO {
         UUID id PK
-        UUID empresa_id FK
         string nombre
         string apellidos
         string email
         string telefono
         string linkedin_url
         string ubicacion_actual
-        string fuente
         boolean consentimiento_gdpr
+        timestamp creado_en
+    }
+    CANDIDATO_EMPRESA {
+        UUID id PK
+        UUID candidato_id FK
+        UUID empresa_id FK
+        jsonb etiquetas
+        text notas
+        string fuente
         timestamp creado_en
     }
     CANDIDATURA {
         UUID id PK
         UUID oferta_id FK
         UUID candidato_id FK
+        UUID empresa_id FK
         UUID etapa_actual_id FK
         enum estado
-        decimal score_ia
+        decimal score_ia_actual
         timestamp aplicado_en
         timestamp ultima_actualizacion
     }
@@ -458,6 +470,8 @@ erDiagram
     RESULTADO_CRIBADO_IA {
         UUID id PK
         UUID candidatura_id FK
+        int version
+        UUID superseded_by_id FK
         decimal score
         text resumen_ejecutivo
         jsonb fortalezas
@@ -489,6 +503,7 @@ erDiagram
         UUID id PK
         UUID entrevista_id FK
         UUID usuario_id FK
+        enum estado
         enum recomendacion
         text comentario_global
         timestamp enviada_en
@@ -540,8 +555,11 @@ erDiagram
 
 ### 5.3. Notas de diseño
 
-- **Aislamiento multi-tenant**: el campo `empresa_id` es obligatorio en todas las tablas operativas y se aplica Row-Level Security en PostgreSQL para garantizar el aislamiento entre clientes.
-- **Trazabilidad**: la entidad `AuditLog` registra cada acción relevante — incluidas las decisiones automáticas tomadas por la IA (`accion = ai_decision`) — para cumplir con el principio de trazabilidad del EU AI Act.
+- **Aislamiento multi-tenant**: el campo `empresa_id` es obligatorio en las tablas operativas (Oferta, Candidatura, Usuario, etc.) y se aplica Row-Level Security en PostgreSQL para garantizar el aislamiento entre clientes. `Candidato` es deliberadamente global (sin `empresa_id`) para evitar duplicación de datos personales y simplificar las solicitudes GDPR; la relación con cada empresa se materializa en `CandidatoEmpresa` y en `Candidatura`.
+- **Identidad de candidato unificada**: un mismo candidato puede aplicar a ofertas de distintas empresas con un único registro. Esto simplifica el cumplimiento de GDPR (un único punto para acceso, rectificación y derecho al olvido) y abre la puerta a futuras funciones de talent pool compatibles con privacidad.
+- **Versionado del cribado IA**: `ResultadoCribadoIA` tiene relación **1:N** con `Candidatura`. Cada re-scoring genera una nueva fila con `version` incremental y enlace `superseded_by_id` al resultado que la sucede. Esto preserva el histórico completo (requisito de trazabilidad) y permite a las consultas operativas filtrar por `superseded_by_id IS NULL` para obtener el resultado vigente.
+- **Estado de Scorecard anti-sesgo**: el campo `estado: enum(borrador, enviada)` permite implementar la regla del CU-03 ("los compañeros ven el progreso en tiempo real sin ver puntuaciones"). Las puntuaciones de una scorecard en estado `borrador` se ocultan a los demás evaluadores; solo se hacen visibles tras pasar a `enviada`.
+- **Trazabilidad**: la entidad `AuditLog` registra cada acción relevante — incluidas las decisiones automáticas tomadas por la IA (`accion = ai_decision`) — y constituye la base sobre la que se construye la trazabilidad exigida por el EU AI Act. El cumplimiento completo del reglamento requerirá además medidas organizativas (supervisión humana, gestión de calidad, evaluaciones de conformidad) fuera del alcance del modelo de datos.
 - **Soft-delete y derecho al olvido**: los candidatos pueden solicitar su eliminación; el sistema marca la entidad como anonimizada y purga los documentos asociados, conservando solo los metadatos necesarios para auditoría.
 - **Indexación de búsqueda**: los CVs y descripciones de oferta se indexan en Elasticsearch para búsqueda textual y en pgvector para búsqueda semántica.
 
@@ -568,7 +586,7 @@ LTI se diseña como un **monolito modular** para el núcleo de negocio, compleme
 | **AI Screening Service** | Parsing de CV, embeddings, scoring, generación de insights LLM | Python + FastAPI |
 | **Realtime Service** | Presencia, colaboración en vivo, push de eventos al cliente | Node.js + Socket.IO o servicio gestionado (Pusher / Ably) |
 | **Notification Service** | Envío de emails, push y mensajería in-app | Node.js + plantillas + proveedor email (SendGrid / SES) |
-| **Workers** | Procesamiento asíncrono: cribado, scoring batch, exports, sync con job boards | BullMQ / Sidekiq sobre Redis o SQS |
+| **Workers** | Procesamiento asíncrono: cribado, scoring batch, exports, sync con job boards | BullMQ (Node.js) sobre Redis / SQS; Celery o RQ para workers en Python |
 | **Bases de datos** | Datos operativos, búsqueda, vectores, caché | PostgreSQL (+ pgvector), Elasticsearch, Redis |
 | **Almacenamiento de objetos** | CVs, cover letters, exports | S3 (compatible con cifrado en reposo) |
 | **Message Queue** | Comunicación asíncrona entre servicios | Amazon SQS o RabbitMQ |
@@ -652,7 +670,7 @@ graph TB
 - **AI Screening Service separado**: el stack óptimo para parsing y NLP es Python (transformers, spaCy, scikit-learn). Aislarlo facilita escalar GPU/CPU independientemente y actualizar modelos sin tocar el core.
 - **Comunicación asíncrona vía cola**: las tareas de IA son lentas (1–10 s por candidatura) y costosas; se desacoplan del request síncrono mediante mensajería.
 - **pgvector en PostgreSQL**: para v1 evita introducir un Vector Store dedicado. Si los volúmenes crecen, migrable a Pinecone o Weaviate sin cambiar el modelo de datos.
-- **WebSockets para colaboración**: presencia, co-edición de scorecards y notificaciones en vivo se canalizan por Realtime Service.
+- **WebSockets para colaboración**: presencia, co-edición de scorecards y notificaciones en vivo se canalizan por Realtime Service. La conexión WSS desde la Web App va directa al Realtime Service (no atraviesa el API Gateway HTTP) para minimizar latencia. Esto implica que el propio Realtime Service valida el JWT en el handshake, aplica throttling por conexión y emite sus propias trazas/métricas. Cuando los volúmenes lo justifiquen, una alternativa es unificar el punto de entrada mediante una WebSocket API gestionada (p. ej. AWS API Gateway v2).
 - **Multi-tenant lógico, no físico**: todos los clientes comparten infra; el aislamiento se garantiza con `empresa_id` + Row-Level Security. Para clientes regulados, opción futura de despliegue dedicado.
 - **Observabilidad transversal**: trazas distribuidas (OpenTelemetry), logs estructurados, métricas de negocio (time-to-hire, coste LLM por candidatura).
 
@@ -820,6 +838,7 @@ flowchart TB
         subgraph ml["ML Pipeline"]
             embeddings["<b>Embedding Generator</b><br/><i>[sentence-transformers]</i>"]
             similarity["<b>Similarity Engine</b><br/><i>[NumPy / scikit-learn]</i>"]
+            vectorClient["<b>Vector Store Client</b><br/><i>[psycopg + pgvector]</i><br/><br/>Abstracción sobre el vector DB"]
         end
 
         subgraph llmLayer["Capa LLM"]
@@ -855,8 +874,9 @@ flowchart TB
     %% Orchestrator → ML
     orchestrator --> embeddings
     orchestrator --> similarity
-    embeddings -->|"Persiste vectores"| pg
-    similarity -->|"Lee vectores"| pg
+    embeddings -->|"Persiste vectores"| vectorClient
+    similarity -->|"Lee vectores"| vectorClient
+    vectorClient -->|"SQL + pgvector"| pg
 
     %% Orchestrator → LLM
     orchestrator --> llmInsights
@@ -879,7 +899,7 @@ flowchart TB
     classDef external fill:#999999,stroke:#6B6B6B,color:#fff
     classDef queue fill:#999999,stroke:#6B6B6B,color:#fff
 
-    class consumer,orchestrator,cvParser,jdAnalyzer,biasDetector,embeddings,similarity,llmInsights,llmGateway,scorer,publisher,audit,api component
+    class consumer,orchestrator,cvParser,jdAnalyzer,biasDetector,embeddings,similarity,vectorClient,llmInsights,llmGateway,scorer,publisher,audit,api component
     class pg,redis,s3 database
     class llm external
     class queue queue
@@ -895,13 +915,13 @@ flowchart TB
 6. El **Similarity Engine** calcula la similitud coseno por dimensión (skills, experiencia, idiomas, ubicación).
 7. El **LLM Insights Generator** invoca al **LLM Gateway** para generar el resumen ejecutivo, fortalezas, riesgos y preguntas sugeridas. El LLM Gateway aplica caché, rate-limiting y fallback entre proveedores.
 8. El **Scoring Aggregator** combina las señales según una fórmula ponderada explicable (no una caja negra): el resultado incluye el desglose por dimensión.
-9. El **Result Publisher** persiste el `ResultadoCribadoIA` en PostgreSQL, registra la decisión en `AuditLog` y emite `cribado.completado` para que el Core ATS y el Realtime Service actualicen la UI del reclutador.
+9. El **Result Publisher** persiste un nuevo `ResultadoCribadoIA` en PostgreSQL — incrementando `version` y enlazando con `superseded_by_id` el resultado anterior si se trata de un re-scoring — registra la decisión en `AuditLog` y emite `cribado.completado` para que el Core ATS y el Realtime Service actualicen la UI del reclutador.
 
 ### 7.5. Decisiones de diseño relevantes
 
 - **Pipeline secuencial y explicable**: cada etapa es un componente con entrada/salida bien definida. Esto permite (a) testear unitariamente, (b) reemplazar modelos sin afectar al resto, y (c) explicar al usuario qué señales contribuyeron al score.
 - **LLM Gateway como punto único de control**: rate limiting, retries con backoff exponencial, caché de respuestas idempotentes, métricas de coste por token y posibilidad de cambiar de proveedor (OpenAI ↔ Anthropic) sin tocar el resto del código.
-- **Audit Logger transversal**: toda decisión automática queda registrada con el ID del modelo, la versión del prompt y las señales de entrada. Es la base del cumplimiento del EU AI Act y permite revisiones humanas a posteriori.
+- **Audit Logger transversal**: toda decisión automática queda registrada con el ID del modelo, la versión del prompt y las señales de entrada. Sienta las bases técnicas necesarias para abordar los requisitos de trazabilidad del EU AI Act y permite revisiones humanas a posteriori.
 - **Idempotencia**: cada job lleva un `idempotency_key` (hash de `candidatura_id + version_modelo`) que evita re-procesar candidaturas ya cribadas si el job se reentrega por la cola.
 - **Human-in-the-loop**: el sistema nunca rechaza automáticamente a un candidato. El score y los insights son apoyo a la decisión del reclutador, no sustituto. Esta restricción está codificada en las reglas de negocio del Core ATS.
 
